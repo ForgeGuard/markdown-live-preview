@@ -46,6 +46,22 @@ docker compose up --build
 
 App is available at [http://localhost:8080](http://localhost:8080).
 
+### Portainer stack / remote Docker Compose example
+
+Use this when deploying from published image (no local build required):
+
+```yaml
+services:
+  markdown-live-preview:
+    image: ghcr.io/forgeguard/markdown-live-preview:latest
+    container_name: markdown-live-preview
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+```
+
+Then open [http://localhost:3002](http://localhost:3002).
+
 ## Helm chart
 
 Chart path: `charts/markdown-live-preview`
@@ -61,16 +77,18 @@ helm package charts/markdown-live-preview --destination .artifacts
 
 ```bash
 helm upgrade --install markdown-live-preview charts/markdown-live-preview \
-  --set image.repository=ghcr.io/<owner>/markdown-live-preview \
+  --set image.repository=ghcr.io/forgeguard/markdown-live-preview \
   --set image.tag=latest
 ```
 
 ### Install from GHCR OCI chart
 
 ```bash
-helm registry login ghcr.io -u <github-user>
-helm pull oci://ghcr.io/<owner>/helm-charts/markdown-live-preview --version <chart-version>
-helm upgrade --install markdown-live-preview ./markdown-live-preview-<chart-version>.tgz
+helm registry login ghcr.io -u <github-user> --password-stdin
+helm pull oci://ghcr.io/forgeguard/helm-charts/markdown-live-preview --version <chart-version>
+helm upgrade --install markdown-live-preview ./markdown-live-preview-<chart-version>.tgz \
+  --set image.repository=ghcr.io/forgeguard/markdown-live-preview \
+  --set image.tag=latest
 ```
 
 ## GitHub Actions workflows
@@ -81,7 +99,7 @@ helm upgrade --install markdown-live-preview ./markdown-live-preview-<chart-vers
 - Trigger: `push` to `main` only
 - Behavior:
   - builds image from `Dockerfile`
-  - pushes to `ghcr.io/<owner>/<repo>`
+  - pushes to `ghcr.io/forgeguard/markdown-live-preview`
   - publishes tags: `latest` and `sha-<commit>`
 
 ### Helm chart workflow
@@ -91,7 +109,7 @@ helm upgrade --install markdown-live-preview ./markdown-live-preview-<chart-vers
 - Behavior:
   - runs `helm lint`
   - packages chart
-  - pushes OCI chart to `ghcr.io/<owner>/helm-charts`
+  - pushes OCI chart to `ghcr.io/forgeguard/helm-charts`
 
 ## Required GitHub package permissions
 
