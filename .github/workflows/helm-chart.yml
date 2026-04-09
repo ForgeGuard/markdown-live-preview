@@ -32,4 +32,5 @@ jobs:
       - name: Push chart to GHCR OCI
         run: |
           chart_file="$(ls .artifacts/*.tgz)"
-          helm push "${chart_file}" "oci://ghcr.io/${{ github.repository_owner }}/helm-charts"
+          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          helm push "${chart_file}" "oci://ghcr.io/${owner_lc}/helm-charts"
