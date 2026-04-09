@@ -1,16 +1,28 @@
 import Storehouse from 'storehouse-js';
-import * as monaco from 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/+esm';
+import * as monaco from 'monaco-editor';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 const init = () => {
     let hasEdited = false;
     let scrollBarSync = false;
+    let privateModeEnabled = false;
+    let allowExternalImages = false;
+    let analyticsEnabled = false;
+    let analyticsInitialized = false;
 
     const localStorageNamespace = 'com.markdownlivepreview';
     const localStorageKey = 'last_state';
     const localStorageScrollBarKey = 'scroll_bar_settings';
     const localStorageThemeKey = 'theme_settings';
+    const localStoragePrivateModeKey = 'private_mode_settings';
+    const localStorageExternalImagesKey = 'external_images_settings';
+    const localStorageAnalyticsKey = 'analytics_settings';
+    const localStorageThemeBootKey = 'com.markdownlivepreview_theme';
+    const localStorageAnalyticsBootKey = 'com.markdownlivepreview_analytics';
+    const contentRetentionDays = 30;
+    const settingsRetentionDays = 365;
+    const analyticsMeasurementId = 'G-77C1GEG9C8';
     const confirmationMessage = 'Are you sure you want to reset? Your changes will be lost.';
     // default template
     const defaultInput = `# Markdown syntax guide
@@ -90,6 +102,81 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         }
     }
 
+    let toBoolean = (value, defaultValue = false) => {
+        if (value === true || value === 'true' || value === 'dark' || value === 'enabled') {
+            return true;
+        }
+        if (value === false || value === 'false' || value === 'light' || value === 'disabled') {
+            return false;
+        }
+        return defaultValue;
+    };
+
+    let getExpiryDate = (days) => {
+        let expiry = new Date();
+        expiry.setDate(expiry.getDate() + days);
+        return expiry;
+    };
+
+    let isAllowedProtocol = (value, allowedSchemes) => {
+        if (!value) {
+            return false;
+        }
+
+        let trimmed = value.trim();
+        if (!trimmed) {
+            return false;
+        }
+
+        if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../') || trimmed.startsWith('#')) {
+            return true;
+        }
+
+        try {
+            let parsed = new URL(trimmed, window.location.origin);
+            return allowedSchemes.has(parsed.protocol);
+        } catch (e) {
+            return false;
+        }
+    };
+
+    let isExternalUrl = (value) => {
+        try {
+            let parsed = new URL(value, window.location.origin);
+            return parsed.origin !== window.location.origin;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    let enforceRenderedUrlPolicy = (containerElement) => {
+        const allowedLinkSchemes = new Set(['http:', 'https:', 'mailto:']);
+        const allowedImageSchemes = new Set(['https:', 'data:']);
+
+        containerElement.querySelectorAll('a[href]').forEach((linkElement) => {
+            let href = linkElement.getAttribute('href');
+            if (!isAllowedProtocol(href, allowedLinkSchemes)) {
+                linkElement.removeAttribute('href');
+                return;
+            }
+            linkElement.setAttribute('rel', 'noopener noreferrer nofollow');
+        });
+
+        containerElement.querySelectorAll('img[src]').forEach((imageElement) => {
+            let src = imageElement.getAttribute('src');
+            let allowedByScheme = isAllowedProtocol(src, allowedImageSchemes);
+            let isRemote = isExternalUrl(src);
+
+            if (!allowedByScheme || (!allowExternalImages && isRemote)) {
+                imageElement.remove();
+                return;
+            }
+
+            imageElement.setAttribute('loading', 'lazy');
+            imageElement.setAttribute('referrerpolicy', 'no-referrer');
+        });
+    };
+
     let setupEditor = () => {
         let editor = monaco.editor.create(document.querySelector('#editor'), {
             fontSize: 14,
@@ -146,7 +233,11 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         };
         let html = marked.parse(markdown, options);
         let sanitized = DOMPurify.sanitize(html);
-        document.querySelector('#output').innerHTML = sanitized;
+        let outputElement = document.querySelector('#output');
+        let containerElement = document.createElement('div');
+        containerElement.innerHTML = sanitized;
+        enforceRenderedUrlPolicy(containerElement);
+        outputElement.innerHTML = containerElement.innerHTML;
     };
 
     // Reset input text
@@ -237,6 +328,61 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         });
     };
 
+    let initAnalytics = () => {
+        if (!analyticsEnabled || analyticsInitialized) {
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = `https://www.googletagmanager.com/gtag/js?id=${analyticsMeasurementId}`;
+        script.onload = () => {
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = function gtag() { window.dataLayer.push(arguments); };
+            window.gtag('js', new Date());
+            window.gtag('config', analyticsMeasurementId);
+            analyticsInitialized = true;
+        };
+        document.head.appendChild(script);
+    };
+
+    let initPrivacyControls = (settings) => {
+        let externalImagesCheckbox = document.querySelector('#external-images-checkbox');
+        let privateModeCheckbox = document.querySelector('#private-mode-checkbox');
+        let analyticsCheckbox = document.querySelector('#analytics-checkbox');
+
+        if (externalImagesCheckbox) {
+            externalImagesCheckbox.checked = settings.allowExternalImages;
+            externalImagesCheckbox.addEventListener('change', (event) => {
+                let checked = event.currentTarget.checked;
+                allowExternalImages = checked;
+                saveExternalImagesSettings(checked);
+                convert(editor.getValue());
+            });
+        }
+
+        if (privateModeCheckbox) {
+            privateModeCheckbox.checked = settings.privateMode;
+            privateModeCheckbox.addEventListener('change', (event) => {
+                let checked = event.currentTarget.checked;
+                privateModeEnabled = checked;
+                savePrivateModeSettings(checked);
+            });
+        }
+
+        if (analyticsCheckbox) {
+            analyticsCheckbox.checked = settings.analyticsEnabled;
+            analyticsCheckbox.addEventListener('change', (event) => {
+                let checked = event.currentTarget.checked;
+                analyticsEnabled = checked;
+                saveAnalyticsSettings(checked);
+                if (checked) {
+                    initAnalytics();
+                }
+            });
+        }
+    };
+
     let enableScrollBarSync = () => {
         scrollBarSync = true;
     };
@@ -261,9 +407,9 @@ This web site is using ${"`"}markedjs/marked${"`"}.
 
     let notifyCopied = () => {
         let labelElement = document.querySelector("#copy-button a");
-        labelElement.innerHTML = "Copied!";
+        labelElement.textContent = "Copied!";
         setTimeout(() => {
-            labelElement.innerHTML = "Copy";
+            labelElement.textContent = "Copy";
         }, 1000)
     };
 
@@ -398,12 +544,18 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     // ----- local state -----
 
     let loadLastContent = () => {
+        if (privateModeEnabled) {
+            return null;
+        }
         let lastContent = Storehouse.getItem(localStorageNamespace, localStorageKey);
         return lastContent;
     };
 
     let saveLastContent = (content) => {
-        let expiredAt = new Date(2099, 1, 1);
+        if (privateModeEnabled) {
+            return;
+        }
+        let expiredAt = getExpiryDate(contentRetentionDays);
         Storehouse.setItem(localStorageNamespace, localStorageKey, content, expiredAt);
     };
 
@@ -417,7 +569,7 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         if (last === null || last === undefined) {
             try {
                 // fallback to raw localStorage boot key used by inline script
-                const raw = localStorage.getItem('com.markdownlivepreview_theme');
+                const raw = localStorage.getItem(localStorageThemeBootKey);
                 if (raw === 'dark') return true;
                 if (raw === 'light') return false;
             } catch (e) {
@@ -427,16 +579,58 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         return last;
     };
 
+    let loadPrivateModeSettings = () => {
+        return Storehouse.getItem(localStorageNamespace, localStoragePrivateModeKey);
+    };
+
+    let loadExternalImagesSettings = () => {
+        return Storehouse.getItem(localStorageNamespace, localStorageExternalImagesKey);
+    };
+
+    let loadAnalyticsSettings = () => {
+        let last = Storehouse.getItem(localStorageNamespace, localStorageAnalyticsKey);
+        if (last === null || last === undefined) {
+            try {
+                const raw = localStorage.getItem(localStorageAnalyticsBootKey);
+                if (raw === 'enabled') return true;
+                if (raw === 'disabled') return false;
+            } catch (e) {
+                // ignore
+            }
+        }
+        return last;
+    };
+
     let saveScrollBarSettings = (settings) => {
-        let expiredAt = new Date(2099, 1, 1);
+        let expiredAt = getExpiryDate(settingsRetentionDays);
         Storehouse.setItem(localStorageNamespace, localStorageScrollBarKey, settings, expiredAt);
     };
 
     let saveThemeSettings = (settings) => {
-        let expiredAt = new Date(2099, 1, 1);
+        let expiredAt = getExpiryDate(settingsRetentionDays);
         Storehouse.setItem(localStorageNamespace, localStorageThemeKey, settings, expiredAt);
         try {
-            localStorage.setItem('com.markdownlivepreview_theme', settings ? 'dark' : 'light');
+            localStorage.setItem(localStorageThemeBootKey, settings ? 'dark' : 'light');
+        } catch (e) {
+            // ignore storage errors
+        }
+    };
+
+    let savePrivateModeSettings = (settings) => {
+        let expiredAt = getExpiryDate(settingsRetentionDays);
+        Storehouse.setItem(localStorageNamespace, localStoragePrivateModeKey, settings, expiredAt);
+    };
+
+    let saveExternalImagesSettings = (settings) => {
+        let expiredAt = getExpiryDate(settingsRetentionDays);
+        Storehouse.setItem(localStorageNamespace, localStorageExternalImagesKey, settings, expiredAt);
+    };
+
+    let saveAnalyticsSettings = (settings) => {
+        let expiredAt = getExpiryDate(settingsRetentionDays);
+        Storehouse.setItem(localStorageNamespace, localStorageAnalyticsKey, settings, expiredAt);
+        try {
+            localStorage.setItem(localStorageAnalyticsBootKey, settings ? 'enabled' : 'disabled');
         } catch (e) {
             // ignore storage errors
         }
@@ -519,6 +713,10 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     };
 
     // ----- entry point -----
+    privateModeEnabled = toBoolean(loadPrivateModeSettings(), false);
+    allowExternalImages = toBoolean(loadExternalImagesSettings(), false);
+    analyticsEnabled = toBoolean(loadAnalyticsSettings(), false);
+
     let lastContent = loadLastContent();
     let editor = setupEditor();
     if (lastContent) {
@@ -536,12 +734,17 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     // initialize theme (dark/light)
     let themeSettings = loadThemeSettings();
     // normalize to boolean (Storehouse may return string or boolean)
-    if (themeSettings === 'true' || themeSettings === true) {
-        themeSettings = true;
-    } else {
-        themeSettings = false;
-    }
+    themeSettings = toBoolean(themeSettings, false);
     initThemeToggle(themeSettings);
+    initPrivacyControls({
+        privateMode: privateModeEnabled,
+        allowExternalImages: allowExternalImages,
+        analyticsEnabled: analyticsEnabled
+    });
+    if (analyticsEnabled) {
+        initAnalytics();
+    }
+    convert(editor.getValue());
 
     setupDivider();
 };

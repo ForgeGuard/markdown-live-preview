@@ -75,6 +75,10 @@ header a:hover {
 
 #sync-button {
     margin-left: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 0;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
