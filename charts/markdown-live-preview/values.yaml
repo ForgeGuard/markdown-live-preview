@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/owner/markdown-live-preview
+  repository: ghcr.io/forgeguard-ai/markdown-live-preview
   pullPolicy: IfNotPresent
   tag: latest
 
