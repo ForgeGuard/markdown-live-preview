@@ -1,8 +1,11 @@
 {
   "name": "markdown-live-preview",
   "version": "1.0.0",
-  "description": "[Markdown Live Preview](https://markdownlivepreview.com/) is a tiny web tool to preview Markdown formatted text.",
+  "description": "Privacy-conscious, browser-only Markdown editor with live preview. ForgeGuard maintained fork of tanabe/markdown-live-preview.",
   "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
@@ -13,15 +16,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tanabe/markdown-live-preview.git"
+    "url": "git+https://github.com/forgeguard-ai/markdown-live-preview.git"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/tanabe/markdown-live-preview/issues"
+    "url": "https://github.com/forgeguard-ai/markdown-live-preview/issues"
   },
-  "homepage": "https://github.com/tanabe/markdown-live-preview#readme",
+  "homepage": "https://github.com/forgeguard-ai/markdown-live-preview#readme",
   "devDependencies": {
     "http-server": "^14.1.1",
     "vite": "^6.4.1"
