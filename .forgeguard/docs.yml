@@ -1,0 +1,26 @@
+version: 1
+enabled: true
+
+project:
+  slug: markdown-live-preview
+  title: ForgeGuard Markdown Live Preview
+  kind: maintained-fork
+  summary: A privacy-hardened Markdown preview distribution with ForgeGuard container and Helm packaging.
+
+repository:
+  owner: forgeguard-ai
+  name: markdown-live-preview
+  default_branch: main
+
+source:
+  content_root: docs/site
+  entrypoint: index.md
+
+publishing:
+  route: /projects/markdown-live-preview/docs
+  versions: both
+  include_generated: false
+
+upstream:
+  repository: tanabe/markdown-live-preview
+  tracking_policy: tagged-releases
